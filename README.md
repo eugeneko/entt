@@ -129,7 +129,7 @@ struct Velocity {
     float dy;
 };
 
-void update(entt::DefaultRegistry &registry) {
+void update(entt::Registry &registry) {
     auto view = registry.view<Position, Velocity>();
 
     for(auto entity: view) {
@@ -144,7 +144,7 @@ void update(entt::DefaultRegistry &registry) {
     }
 }
 
-void update(std::uint64_t dt, entt::DefaultRegistry &registry) {
+void update(std::uint64_t dt, entt::Registry &registry) {
     registry.view<Position, Velocity>().each([dt](auto entity, auto &position, auto &velocity) {
         // gets all the components of the view at once ...
 
@@ -156,7 +156,7 @@ void update(std::uint64_t dt, entt::DefaultRegistry &registry) {
 }
 
 int main() {
-    entt::DefaultRegistry registry;
+    entt::Registry registry;
     std::uint64_t dt = 16;
 
     for(auto i = 0; i < 10; ++i) {
@@ -242,7 +242,7 @@ open an issue to discuss your idea.
 ## Requirements
 
 To be able to use `EnTT`, users must provide a full-featured compiler that
-supports at least C++14.<br/>
+supports at least C++17.<br/>
 The requirements below are mandatory to compile the tests and to extract the
 documentation:
 
@@ -360,13 +360,13 @@ specify the component set at compile-time.<br/>
 This is why users can instantiate the core class simply like:
 
 ```cpp
-entt::DefaultRegistry registry;
+entt::Registry registry;
 ```
 
 In place of its more annoying and error-prone counterpart:
 
 ```cpp
-entt::DefaultRegistry<Comp0, Comp1, ..., CompN> registry;
+entt::Registry<Comp0, Comp1, ..., CompN> registry;
 ```
 
 ### Pay per use
@@ -398,8 +398,8 @@ use as-is and store around if needed. Do not try to inspect an entity
 identifier, its format can change in future and a registry offers all the
 functionalities to query them out-of-the-box. The underlying type of an entity
 (either `std::uint16_t`, `std::uint32_t` or `std::uint64_t`) can be specified
-when defining a registry (actually the `DefaultRegistry` is nothing more than a
-`Registry` where the type of the entities is `std::uint32_t`).<br/>
+when defining a registry (actually `Registry` is nothing more than an _alias_
+for `Registry<std::uint32_t>`).<br/>
 Components (the _C_ of an _ECS_) should be plain old data structures or more
 complex and movable data structures with a proper constructor. Actually, the
 sole requirement of a component type is that it must be both move constructible
@@ -422,8 +422,7 @@ A registry can store and manage entities, as well as create views to iterate the
 underlying data structures.<br/>
 `Registry` is a class template that lets users decide what's the preferred type
 to represent an entity. Because `std::uint32_t` is large enough for almost all
-the cases, there exists also an alias named `DefaultRegistry` for
-`Registry<std::uint32_t>`.
+the cases, `Registry` is an _alias_ for `Registry<std::uint32_t>`.
 
 Entities are represented by _entity identifiers_. An entity identifier is an
 opaque type that users should not inspect or modify in any way. It carries
@@ -571,12 +570,12 @@ Finally, references to components can be retrieved simply by doing this:
 const auto &cregistry = registry;
 
 // const and non-const reference
-const Position &position = cregistry.get<Position>(entity);
-Position &position = registry.get<Position>(entity);
+const auto &crenderable = cregistry.get<Renderable>(entity);
+auto &renderable = registry.get<Renderable>(entity);
 
 // const and non-const references
-std::tuple<const Position &, const Velocity &> tup = cregistry.get<Position, Velocity>(entity);
-std::tuple<Position &, Velocity &> tup = registry.get<Position, Velocity>(entity);
+const auto &[cposition, cvelocity] = cregistry.get<Position, Velocity>(entity);
+auto &[position, velocity] = registry.get<Position, Velocity>(entity);
 ```
 
 The `get` member function template gives direct access to the component of an
@@ -673,19 +672,20 @@ notified on the creation of a component, use the `construction` member function:
 registry.construction<Position>().connect<&MyFreeFunction>();
 
 // connects a member function
-registry.construction<Position>().connect<MyClass, &MyClass::member>(&instance);
+registry.construction<Position>().connect<&MyClass::member>(&instance);
 
 // disconnects a free function
 registry.construction<Position>().disconnect<&MyFreeFunction>();
 
 // disconnects a member function
-registry.construction<Position>().disconnect<MyClass, &MyClass::member>(&instance);
+registry.construction<Position>().disconnect<&MyClass::member>(&instance);
 ```
 
 To be notified when components are destroyed, use the `destruction` member
 function instead.
 
-The function type of a listener is the same in both cases:
+The function type of a listener is the same in both cases and should be
+equivalent to:
 
 ```cpp
 void(Registry<Entity> &, Entity);
@@ -734,7 +734,7 @@ member functions as in the following example:
 
 ```cpp
 registry.construction<MyTag>(entt::tag_t{}).connect<&MyFreeFunction>();
-registry.destruction<MyTag>(entt::tag_t{}).connect<MyClass, &MyClass::member>(&instance);
+registry.destruction<MyTag>(entt::tag_t{}).connect<&MyClass::member>(&instance);
 ```
 
 Listeners for tags and components are managed separately and do not influence
@@ -759,7 +759,7 @@ to work with the type system.
 In `EnTT`, identifiers are easily accessible:
 
 ```cpp
-entt::DefaultRegistry registry;
+entt::Registry registry;
 
 // standard component identifier
 auto ctype = registry.type<Position>();
@@ -1082,7 +1082,7 @@ how many prototypes they want, each one initialized differently from the others.
 The following is an example of use of a prototype:
 
 ```cpp
-entt::DefaultRegistry registry;
+entt::Registry registry;
 entt::DefaultPrototype prototype{registry};
 
 prototype.set<Position>(100.f, 100.f);
@@ -1198,7 +1198,7 @@ other than defining the null entity itself. However, there exist implicit
 conversions from the null entity to identifiers of any allowed type:
 
 ```cpp
-typename entt::DefaultRegistry::entity_type null = entt::null;
+typename entt::Registry::entity_type null = entt::null;
 ```
 
 Similarly, the null entity can be compared to any other identifier:
@@ -1400,11 +1400,11 @@ auto view = registry.view<Position, Velocity>();
 
 for(auto entity: view) {
     // a component at a time ...
-    Position &position = view.get<Position>(entity);
-    Velocity &velocity = view.get<Velocity>(entity);
+    auto &position = view.get<Position>(entity);
+    auto &velocity = view.get<Velocity>(entity);
 
     // ... or multiple components at once
-    std::tuple<Position &, Velocity &> tup = view.get<Position, Velocity>(entity);
+    auto &[position, velocity] = view.get<Position, Velocity>(entity);
 
     // ...
 }
@@ -1474,11 +1474,11 @@ auto view = registry.view<Position, Velocity>(entt::persistent_t{});
 
 for(auto entity: view) {
     // a component at a time ...
-    Position &position = view.get<Position>(entity);
-    Velocity &velocity = view.get<Velocity>(entity);
+    auto &position = view.get<Position>(entity);
+    auto &velocity = view.get<Velocity>(entity);
 
     // ... or multiple components at once
-    std::tuple<Position &, Velocity &> tup = view.get<Position, Velocity>(entity);
+    auto &[position, velocity] = view.get<Position, Velocity>(entity);
 
     // ...
 }
@@ -1575,7 +1575,7 @@ for(auto entity: view) {
     Velocity &velocity = registry.get<Velocity>(entity);
 
     // ... or multiple components at once
-    std::tuple<Position &, Velocity &> tup = view.get<Position, Velocity>(entity);
+    auto &[position, velocity] = view.get<Position, Velocity>(entity);
 
     // ...
 }
@@ -2399,7 +2399,7 @@ listeners in all their forms by means of a sink:
 void foo(int, char) { /* ... */ }
 
 struct S {
-    void bar(int, char) { /* ... */ }
+    void bar(const int &, char) { /* ... */ }
 };
 
 // ...
@@ -2407,7 +2407,7 @@ struct S {
 S instance;
 
 signal.sink().connect<&foo>();
-signal.sink().connect<S, &S::bar>(&instance);
+signal.sink().connect<&S::bar>(&instance);
 
 // ...
 
@@ -2415,7 +2415,7 @@ signal.sink().connect<S, &S::bar>(&instance);
 signal.sink().disconnect<&foo>();
 
 // disconnect a specific member function of an instance ...
-signal.sink().disconnect<S, &S::bar>(&instance);
+signal.sink().disconnect<&S::bar>(&instance);
 
 // ... or an instance as a whole
 signal.sink().disconnect(&instance);
@@ -2423,6 +2423,10 @@ signal.sink().disconnect(&instance);
 // discards all the listeners at once
 signal.sink().disconnect();
 ```
+
+As shown above, listeners do not have to strictly follow the signature of the
+signal. As long as a listener can be invoked with the given arguments to yield a
+result that is convertible to the given result type, everything works just fine.
 
 Once listeners are attached (or even if there are no listeners at all), events
 and data in general can be published through a signal by means of the `publish`
@@ -2496,7 +2500,7 @@ There exist two functions to do that, both named `connect`:
 int f(int i) { return i; }
 
 struct MyStruct {
-    int f(int i) { return i }
+    int f(const int &i) { return i }
 };
 
 // bind a free function to the delegate
@@ -2504,7 +2508,7 @@ delegate.connect<&f>();
 
 // bind a member function to the delegate
 MyStruct instance;
-delegate.connect<MyStruct, &MyStruct::f>(&instance);
+delegate.connect<&MyStruct::f>(&instance);
 ```
 
 It hasn't a `disconnect` counterpart. Instead, there exists a `reset` member
@@ -2521,6 +2525,11 @@ usual:
 ```cpp
 auto ret = delegate(42);
 ```
+
+As shown above, listeners do not have to strictly follow the signature of the
+delegate. As long as a listener can be invoked with the given arguments to yield
+a result that is convertible to the given result type, everything works just
+fine.
 
 Probably too much small and pretty poor of functionalities, but the delegate
 class can help in a lot of cases and it has shown that it is worth keeping it
@@ -2540,8 +2549,9 @@ entt::Dispatcher dispatcher{};
 ```
 
 In order to register an instance of a class to a dispatcher, its type must
-expose one or more member functions of which the return types are `void` and the
-argument lists are `const E &`, for each type of event `E`.<br/>
+expose one or more member functions the arguments of which are such that
+`const E &` can be converted to them for each type of event `E`, no matter what
+the return value is.<br/>
 To ease the development, member functions that are named `receive` are
 automatically detected and have not to be explicitly specified when registered.
 In all the other cases, the name of the member function aimed to receive the
@@ -2562,7 +2572,7 @@ struct Listener
 
 Listener listener;
 dispatcher.sink<AnEvent>().connect(&listener);
-dispatcher.sink<AnotherEvent>().connect<Listener, &Listener::method>(&listener);
+dispatcher.sink<AnotherEvent>().connect<&Listener::method>(&listener);
 ```
 
 The `disconnect` member function follows the same pattern and can be used to
@@ -2570,7 +2580,7 @@ selectively remove listeners:
 
 ```cpp
 dispatcher.sink<AnEvent>().disconnect(&listener);
-dispatcher.sink<AnotherEvent>().disconnect<Listener, &Listener::method>(&listener);
+dispatcher.sink<AnotherEvent>().disconnect<&Listener::method>(&listener);
 ```
 
 The `trigger` member function serves the purpose of sending an immediate event
